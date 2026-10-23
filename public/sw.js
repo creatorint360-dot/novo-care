@@ -2,7 +2,7 @@
 // Service worker: lets Novo Staff install like an app and open its screens
 // quickly. It stores ONLY the page files (HTML, CSS, JS, icons).
 // It never stores anything from /api, so no staff data is kept on the phone.
-const CACHE = 'novo-staff-shell-v1';
+const CACHE = 'novo-staff-shell-v2';
 const SHELL = ['/', '/style.css', '/app.js', '/favicon.svg', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {

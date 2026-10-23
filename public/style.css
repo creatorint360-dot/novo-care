@@ -126,3 +126,14 @@ td.wrap { word-break: break-all; max-width: 280px; }
 .breakall { word-break: break-all; }
 .narrow { max-width: 480px; }
 .hint { margin-top: 14px; color: var(--muted); font-size: .85rem; }
+
+/* ---------- show / hide password ---------- */
+.pw-wrap { position: relative; }
+.pw-wrap input { padding-right: 74px; }
+.pw-toggle {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  border: 0; background: none; cursor: pointer; padding: 6px 10px;
+  color: var(--violet); font-weight: 700; font-size: .82rem; border-radius: 8px;
+}
+.pw-toggle:hover { background: #f1ecff; }
+.danger-zone { border-color: #f3c3cb; }

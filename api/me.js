@@ -12,6 +12,10 @@ module.exports = route({ methods: ['GET'] }, async ({ res, user }) => {
   const mine = await db.query('select count(*)::int as n from records where user_id = $1', [user.id]);
   stats['My records'] = mine.rows[0].n;
 
+  if (rbac.canSeeAllRecords(user.role)) {
+    const all = await db.query('select count(*)::int as n from records');
+    stats['All records'] = all.rows[0].n;
+  }
   if (user.role !== 'inputter') {
     const r = await db.query("select count(*)::int as n from users u join roles r on r.id = u.role_id where r.name = 'inputter'");
     stats['Inputters'] = r.rows[0].n;
@@ -31,6 +35,8 @@ module.exports = route({ methods: ['GET'] }, async ({ res, user }) => {
       canViewAudit: rbac.canViewAudit(user.role),
       canRecover: rbac.canRecoverAccounts(user.role),
       seesAllRecords: rbac.canSeeAllRecords(user.role),
+      canBackup: rbac.canBackup(user.role),
+      canRestoreOrReset: rbac.canRestoreOrReset(user.role),
     },
     demoMode: demoMode(),
     stats,

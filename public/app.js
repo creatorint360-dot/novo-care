@@ -39,6 +39,29 @@ function mount(node) { root.replaceChildren(node); }
 function say(box, kind, text) { box.replaceChildren(text ? h('div', { class: 'msg ' + kind }, text) : ''); }
 const fmt = (d) => new Date(d).toLocaleString();
 
+// A password box with a Show / Hide button, so people can check what they typed.
+function pwInput(attrs) {
+  const input = h('input', { type: 'password', required: true, ...attrs });
+  const btn = h('button', { class: 'pw-toggle', type: 'button', 'aria-label': 'Show password' }, 'Show');
+  btn.addEventListener('click', () => {
+    const show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    btn.textContent = show ? 'Hide' : 'Show';
+    btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+  });
+  return h('div', { class: 'pw-wrap' }, input, btn);
+}
+
+// Browsers like to pre-fill saved logins. These boxes start read-only and unlock when
+// touched, which stops that, so the sign-in screen always opens empty.
+function noAutofill(input) {
+  input.setAttribute('readonly', '');
+  const unlock = () => input.removeAttribute('readonly');
+  input.addEventListener('focus', unlock);
+  input.addEventListener('pointerdown', unlock);
+  return input;
+}
+
 // Wraps a form submit: disables the button while the request runs.
 function submit(form, box, work) {
   form.addEventListener('submit', async (e) => {
@@ -72,9 +95,9 @@ function viewLogin(note) {
   const box = h('div');
   const form = h('form', { autocomplete: 'off' },
     h('label', { for: 'username' }, 'Username'),
-    h('input', { id: 'username', name: 'username', required: true, maxlength: 50, autocomplete: 'username' }),
+    noAutofill(h('input', { id: 'username', name: 'username', required: true, maxlength: 50, autocomplete: 'off', autocapitalize: 'none', spellcheck: 'false' })),
     h('label', { for: 'password' }, 'Password'),
-    h('input', { id: 'password', name: 'password', type: 'password', required: true, autocomplete: 'current-password' }),
+    pwInput({ id: 'password', name: 'password', autocomplete: 'new-password' }),
     h('button', { class: 'btn block', type: 'submit' }, 'Continue'));
   submit(form, box, async (f) => {
     const r = await api('/api/login', 'POST', f);
@@ -125,11 +148,11 @@ async function viewTwoFactor() {
 async function viewSetup() {
   const box = h('div');
   const form = h('form', { autocomplete: 'off' },
-    h('label', {}, 'Setup token (from your Render settings)'), h('input', { name: 'token', type: 'password', required: true }),
+    h('label', {}, 'Setup token (from your Render settings)'), pwInput({ name: 'token', autocomplete: 'off' }),
     h('label', {}, 'Full name'), h('input', { name: 'full_name', required: true, maxlength: 100 }),
     h('label', {}, 'Username'), h('input', { name: 'username', required: true, maxlength: 30 }),
     h('label', {}, 'Email'), h('input', { name: 'email', type: 'email', required: true }),
-    h('label', {}, 'Password (10+ characters, upper, lower, number, symbol)'), h('input', { name: 'password', type: 'password', required: true, autocomplete: 'new-password' }),
+    h('label', {}, 'Password (10+ characters, upper, lower, number, symbol)'), pwInput({ name: 'password', autocomplete: 'new-password' }),
     h('button', { class: 'btn block', type: 'submit' }, 'Create the Administrator'));
   submit(form, box, async (f) => {
     const r = await api('/api/setup', 'POST', f);
@@ -161,6 +184,7 @@ function shell(active, title, subtitle, ...content) {
   const items = [['dashboard', 'Dashboard'], ['records', 'Records']];
   if (a.creatableRoles.length || a.canDeleteInputters) items.push(['users', 'Users']);
   if (a.canViewAudit) items.push(['audit', 'Audit log']);
+  if (a.canBackup) items.push(['backups', 'Backup']);
   if (a.canViewAudit && ME.demoMode) items.push(['credentials', 'Salt & pepper']);
   items.push(['password', 'Change password']);
 
@@ -180,7 +204,7 @@ function shell(active, title, subtitle, ...content) {
       content)));
 }
 
-const views = { dashboard, records, users, audit, credentials, password };
+const views = { dashboard, records, users, audit, backups, credentials, password };
 function go(name) { resetIdle(); return views[name](); }
 
 async function boot() {
@@ -222,7 +246,7 @@ async function records() {
   async function load() {
     const r = await api('/api/records');
     if (!r.ok) return viewLogin('Please sign in again.');
-    list.replaceChildren(r.data.records.length ? r.data.records.map((rec) =>
+    list.replaceChildren(...(r.data.records.length ? r.data.records.map((rec) =>
       h('div', { class: 'record' },
         h('header', {}, h('b', {}, rec.title), h('small', {}, rec.fullName + ' - ' + fmt(rec.createdAt))),
         h('p', {}, rec.details),
@@ -231,7 +255,7 @@ async function records() {
             if (!confirm('Delete this record?')) return;
             const d = await api('/api/records', 'POST', { action: 'delete', id: rec.id });
             say(box, d.ok ? 'ok' : 'error', d.ok ? 'Record deleted.' : d.data.error); load();
-          } }, 'Delete')) : null)) : h('p', { class: 'empty' }, 'No records yet.'));
+          } }, 'Delete')) : null)) : [h('p', { class: 'empty' }, 'No records yet.')]));
   }
   submit(form, box, async (f) => {
     const r = await api('/api/records', 'POST', f);
@@ -256,7 +280,7 @@ async function users() {
       h('label', {}, 'Username'), h('input', { name: 'username', required: true, maxlength: 30 }),
       h('label', {}, 'Email'), h('input', { name: 'email', type: 'email', required: true }),
       h('label', {}, 'Role'), h('select', { name: 'role' }, a.creatableRoles.map((r) => h('option', { value: r }, r))),
-      h('label', {}, 'Temporary password'), h('input', { name: 'password', type: 'password', required: true, autocomplete: 'new-password' }),
+      h('label', {}, 'Temporary password'), pwInput({ name: 'password', autocomplete: 'new-password' }),
       h('button', { class: 'btn block', type: 'submit' }, 'Create account'));
     submit(form, box, async (f) => {
       const r = await api('/api/users', 'POST', { ...f, action: 'add' });
@@ -341,7 +365,7 @@ async function credentials() {
 
   const form = h('form', { autocomplete: 'off' },
     h('label', {}, 'Username'), h('input', { name: 'username', required: true }),
-    h('label', {}, 'Password to test'), h('input', { name: 'password', type: 'password', required: true }),
+    h('label', {}, 'Password to test'), pwInput({ name: 'password', autocomplete: 'off' }),
     h('button', { class: 'btn block', type: 'submit' }, 'Run the 4 steps'));
   submit(form, box, async (f) => {
     const d = await api('/api/credentials', 'POST', f);
@@ -362,12 +386,96 @@ async function credentials() {
 }
 const step = (label, value) => h('div', { class: 'step' }, h('b', {}, label), h('span', { class: 'mono breakall' }, value));
 
+async function backups() {
+  const a = ME.abilities;
+  const box = h('div');
+  const tableHolder = h('div');
+  const confirmHolder = h('div');
+
+  async function load() {
+    const r = await api('/api/backups');
+    if (!r.ok) return say(box, 'error', r.data.error || 'Could not load the backups.');
+    if (!r.data.backups.length) return tableHolder.replaceChildren(h('p', { class: 'empty' }, 'No backups yet. Press "Back up now".'));
+    tableHolder.replaceChildren(h('div', { class: 'table-wrap' }, h('table', {},
+      h('thead', {}, h('tr', {}, ['#', 'When', 'By', 'Type', 'Users', 'Records', ''].map((t) => h('th', {}, t)))),
+      h('tbody', {}, r.data.backups.map((b) => h('tr', {},
+        h('td', {}, b.id), h('td', {}, fmt(b.createdAt)), h('td', {}, b.by || '-'),
+        h('td', {}, b.kind), h('td', {}, b.users), h('td', {}, b.records),
+        h('td', {}, a.canRestoreOrReset ? h('button', { class: 'btn ghost small', onclick: () => askRestore(b) }, 'Restore') : null)))))));
+  }
+
+  // Restore and Reset both ask for the Administrator's password again.
+  function askRestore(b) {
+    const msg = h('div');
+    const form = h('form', { autocomplete: 'off' },
+      h('label', {}, 'Your password (to confirm)'), pwInput({ name: 'password', autocomplete: 'off' }),
+      h('div', { class: 'actions top-gap' },
+        h('button', { class: 'btn danger', type: 'submit' }, 'Restore backup #' + b.id),
+        h('button', { class: 'btn ghost', type: 'button', onclick: () => confirmHolder.replaceChildren() }, 'Cancel')));
+    submit(form, msg, async (f) => {
+      const r = await api('/api/backups', 'POST', { action: 'restore', id: b.id, password: f.password });
+      if (!r.ok) return say(msg, 'error', r.data.error || 'Restore failed.');
+      confirmHolder.replaceChildren();
+      say(box, 'ok', r.data.message);
+      load();
+    });
+    confirmHolder.replaceChildren(h('div', { class: 'card' },
+      h('h3', {}, 'Restore backup #' + b.id + '?'),
+      h('p', { class: 'bottom-gap' }, 'The current records are replaced by the records in this backup (' + b.records + '). A safety backup is taken first. Accounts, passwords, 2FA and settings are not changed.'),
+      msg, form));
+    confirmHolder.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  const backupBtn = h('button', { class: 'btn', type: 'button' }, 'Back up now');
+  backupBtn.addEventListener('click', async () => {
+    backupBtn.disabled = true;
+    try {
+      const r = await api('/api/backups', 'POST', { action: 'create' });
+      say(box, r.ok ? 'ok' : 'error', r.ok ? r.data.message : (r.data.error || 'Backup failed.'));
+      if (r.ok) load();
+    } catch (e) { say(box, 'error', 'Could not reach the server. Check your connection.'); }
+    backupBtn.disabled = false;
+  });
+
+  let resetCard = null;
+  if (a.canRestoreOrReset) {
+    const msg = h('div');
+    const form = h('form', { autocomplete: 'off' },
+      h('label', {}, 'Type RESET in capital letters'), h('input', { name: 'confirm', required: true, autocomplete: 'off' }),
+      h('label', {}, 'Your password'), pwInput({ name: 'password', autocomplete: 'off' }),
+      h('button', { class: 'btn danger block', type: 'submit' }, 'Reset records (keep settings)'));
+    submit(form, msg, async (f) => {
+      if (!confirm('Delete ALL records now? A safety backup is taken first.')) return;
+      const r = await api('/api/backups', 'POST', { action: 'reset', confirm: f.confirm, password: f.password });
+      if (!r.ok) return say(msg, 'error', r.data.error || 'Reset failed.');
+      form.reset();
+      say(msg, '', '');
+      say(box, 'ok', r.data.message);
+      load();
+    });
+    resetCard = h('div', { class: 'card danger-zone' },
+      h('h3', {}, 'Reset (Administrator only)'),
+      h('p', { class: 'bottom-gap' }, 'Empties all staff records so you can start again. Accounts, roles, passwords, two-factor devices and every setting stay exactly as they are. A safety backup is saved first, so Restore can bring the records back.'),
+      msg, form);
+  }
+
+  shell('backups', 'Backup', a.canRestoreOrReset ? 'Save, restore or reset the records.' : 'Save a copy of the data.',
+    box,
+    h('div', { class: 'card' }, h('h3', {}, 'Back up now'),
+      h('p', { class: 'bottom-gap' }, 'Saves an encrypted copy (AES-256-GCM) of the users and records. Nobody can read it without the system key. The newest 20 backups are kept.'),
+      backupBtn),
+    confirmHolder,
+    h('div', { class: 'card' }, h('h3', {}, 'Saved backups'), tableHolder),
+    resetCard);
+  load();
+}
+
 async function password() {
   const box = h('div');
   const form = h('form', { autocomplete: 'off' },
-    h('label', {}, 'Current password'), h('input', { name: 'current', type: 'password', required: true, autocomplete: 'current-password' }),
-    h('label', {}, 'New password'), h('input', { name: 'new', type: 'password', required: true, autocomplete: 'new-password' }),
-    h('label', {}, 'Repeat new password'), h('input', { name: 'confirm', type: 'password', required: true, autocomplete: 'new-password' }),
+    h('label', {}, 'Current password'), pwInput({ name: 'current', autocomplete: 'current-password' }),
+    h('label', {}, 'New password'), pwInput({ name: 'new', autocomplete: 'new-password' }),
+    h('label', {}, 'Repeat new password'), pwInput({ name: 'confirm', autocomplete: 'new-password' }),
     h('button', { class: 'btn block', type: 'submit' }, 'Change password'));
   submit(form, box, async (f) => {
     const r = await api('/api/password', 'POST', f);

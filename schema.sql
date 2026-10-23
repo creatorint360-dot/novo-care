@@ -51,5 +51,18 @@ create table if not exists audit_log (
   created_at timestamptz not null default now()
 );
 
+-- Backups: a snapshot of the users and records, stored ENCRYPTED (AES-256-GCM)
+-- in the data column. Nobody can read a snapshot without the ENC_KEY setting.
+create table if not exists backups (
+  id              serial primary key,
+  created_at      timestamptz not null default now(),
+  created_by      integer references users(id) on delete set null,
+  created_by_name varchar(50),
+  kind            varchar(30) not null,                -- manual | auto before restore | auto before reset
+  users_count     integer not null,
+  records_count   integer not null,
+  data            text not null                        -- encrypted snapshot
+);
+
 -- The first Administrator is created by the website's /setup page, not here,
 -- so no default password ever exists.
