@@ -98,7 +98,8 @@ function authFrame(content) {
       h('div', {},
         h('h1', {}, L.tagline),
         h('p', {}, L.intro),
-        h('ul', {}, L.pills.map((t) => h('li', {}, t)))),
+        h('ul', {}, L.pills.map((t) => h('li', {}, t))),
+        h('a', { class: 'report-link', href: '/report' }, 'Read the project report')),
       h('small', {}, 'Computer Security - PBIT 309 / PBSE 309')),
     h('main', { class: 'auth-main' }, h('div', { class: 'panel' }, content)));
 }

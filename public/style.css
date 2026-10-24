@@ -32,6 +32,8 @@ code, .mono { font-family: ui-monospace, Consolas, monospace; font-size: .86em; 
 .auth-art h1 { font-size: 2.4rem; margin-bottom: 14px; max-width: 14ch; }
 .auth-art p { opacity: .92; max-width: 40ch; }
 .auth-art ul { list-style: none; margin-top: 26px; display: grid; gap: 10px; }
+.report-link { display: inline-block; margin-top: 22px; padding: 10px 18px; border-radius: 12px; background: #fff; color: var(--violet); font-weight: 700; text-decoration: none; }
+.report-link:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
 .auth-art li { background: rgba(255,255,255,.16); padding: 10px 14px; border-radius: 12px; font-size: .93rem; }
 .auth-main { display: grid; place-items: center; padding: 32px 20px; }
 .panel { width: 100%; max-width: 410px; }
