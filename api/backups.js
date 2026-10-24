@@ -16,6 +16,7 @@ const { encrypt, decrypt } = require('../lib/crypto');
 const { verifyCredentials } = require('../lib/security');
 const { registerFailure } = require('../lib/lockout');
 const { audit } = require('../lib/audit');
+const { labels } = require('../lib/labels');
 
 const KEEP = 20;          // the newest 20 snapshots are kept
 
@@ -60,7 +61,7 @@ module.exports = route({ methods: ['GET', 'POST'], roles: ['manager', 'admin', '
   if (body.action === 'create') {
     const snap = await takeSnapshot('manual', user);
     await audit('backup_created', 'Backup #' + snap.id + ' (' + snap.users + ' users, ' + snap.records + ' records)', user.id, user.username, ip);
-    return json(res, 201, { ok: true, backup: snap, message: 'Backup #' + snap.id + ' saved: ' + snap.users + ' users and ' + snap.records + ' records.' });
+    return json(res, 201, { ok: true, backup: snap, message: 'Backup #' + snap.id + ' saved: ' + snap.users + ' users and ' + snap.records + ' ' + labels().records + '.' });
   }
 
   // ---- everything below is Administrator only ----
@@ -77,7 +78,7 @@ module.exports = route({ methods: ['GET', 'POST'], roles: ['manager', 'admin', '
     const safety = await takeSnapshot('auto before reset', user);
     const del = await db.query('delete from records');
     await audit('system_reset', 'Deleted ' + del.rowCount + ' records. Safety backup #' + safety.id, user.id, user.username, ip);
-    return json(res, 200, { ok: true, message: 'System reset: ' + del.rowCount + ' records removed. Accounts and settings were not changed. Safety backup #' + safety.id + ' was saved first.' });
+    return json(res, 200, { ok: true, message: 'System reset: ' + del.rowCount + ' ' + labels().records + ' removed. Accounts and settings were not changed. Safety backup #' + safety.id + ' was saved first.' });
   }
 
   // ---- restore ----
@@ -100,5 +101,5 @@ module.exports = route({ methods: ['GET', 'POST'], roles: ['manager', 'admin', '
     [JSON.stringify(snapshot.records)]);
   const skipped = snapshot.records.length - done.rowCount;
   await audit('backup_restored', 'Restored backup #' + id + ': ' + done.rowCount + ' records' + (skipped ? ', ' + skipped + ' skipped (owner deleted)' : '') + '. Safety backup #' + safety.id, user.id, user.username, ip);
-  return json(res, 200, { ok: true, message: 'Restored ' + done.rowCount + ' records from backup #' + id + (skipped ? ' (' + skipped + ' skipped because their owner no longer exists)' : '') + '. Accounts and settings were not changed. Safety backup #' + safety.id + ' was saved first.' });
+  return json(res, 200, { ok: true, message: 'Restored ' + done.rowCount + ' ' + labels().records + ' from backup #' + id + (skipped ? ' (' + skipped + ' skipped because their owner no longer exists)' : '') + '. Accounts and settings were not changed. Safety backup #' + safety.id + ' was saved first.' });
 });

@@ -9,6 +9,7 @@ const { route, json } = require('../lib/http');
 const rbac = require('../lib/rbac');
 const { encrypt, decrypt } = require('../lib/crypto');
 const { audit } = require('../lib/audit');
+const { labels } = require('../lib/labels');
 
 module.exports = route({ methods: ['GET', 'POST'] }, async ({ req, res, body, user, ip }) => {
   if (req.method === 'GET') {
@@ -34,10 +35,10 @@ module.exports = route({ methods: ['GET', 'POST'] }, async ({ req, res, body, us
   if (body.action === 'delete') {
     const found = await db.query('select id, user_id, title from records where id = $1', [Number(body.id) || 0]);
     const rec = found.rows[0];
-    if (!rec) return json(res, 404, { error: 'Record not found.' });
+    if (!rec) return json(res, 404, { error: labels().Record + ' not found.' });
     if (!(rec.user_id === user.id || rbac.canDeleteAnyRecord(user.role))) {
       await audit('delete_denied', 'Tried to delete record #' + rec.id, user.id, user.username, ip);
-      return json(res, 403, { error: 'You are not allowed to delete that record.' });
+      return json(res, 403, { error: 'You are not allowed to delete that ' + labels().record + '.' });
     }
     await db.query('delete from records where id = $1', [rec.id]);
     await audit('record_deleted', rec.title, user.id, user.username, ip);
@@ -48,7 +49,7 @@ module.exports = route({ methods: ['GET', 'POST'] }, async ({ req, res, body, us
   const title = String(body.title || '').trim();
   const details = String(body.details || '').trim();
   if (!title || !details || title.length > 150 || details.length > 5000) {
-    return json(res, 400, { error: 'Enter a title (up to 150 characters) and the details.' });
+    return json(res, 400, { error: 'Enter the ' + labels().titleLabel.toLowerCase() + ' (up to 150 characters) and the details.' });
   }
   await db.query('insert into records (user_id, title, details) values ($1, $2, $3)', [user.id, title, encrypt(details)]);
   await audit('record_added', title, user.id, user.username, ip);

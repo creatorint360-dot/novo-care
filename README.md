@@ -1,6 +1,6 @@
-# Novo Staff
+# Novo Care (a configurable secure login system)
 
-Secure staff login: username + password (salt + pepper), 6-digit authenticator code (TOTP 2FA),
+Secure login: username + password (salt + pepper), 6-digit authenticator code (TOTP 2FA),
 role-based access (Inputter, Manager, Admin, Administrator), encrypted records, audit log.
 Installs on a phone like an app (PWA).
 
@@ -10,6 +10,8 @@ Installs on a phone like an app (PWA).
 - `server.js` the web server (runs on Render)
 - `schema.sql`, `least_privilege.sql`  database setup (AWS RDS PostgreSQL)
 - `scripts/`  one-time helper scripts
+- `lib/labels.js`  the words the system uses. Setting `SYSTEM_PROFILE` to `clinic` (default), `school`, `bank` or `staff`
+  re-labels the website and the phone app (roles, what a record is called) with no other change.
 
 Secrets are never in this repo. They are typed into Render > Environment
 (see `.env.example` for the names).

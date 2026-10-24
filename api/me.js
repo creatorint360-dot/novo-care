@@ -5,20 +5,22 @@ const db = require('../lib/db');
 const { route, json } = require('../lib/http');
 const rbac = require('../lib/rbac');
 const { demoMode } = require('../lib/security');
+const { labels } = require('../lib/labels');
 
 module.exports = route({ methods: ['GET'] }, async ({ res, user }) => {
   const stats = {};
+  const L = labels();
 
   const mine = await db.query('select count(*)::int as n from records where user_id = $1', [user.id]);
-  stats['My records'] = mine.rows[0].n;
+  stats['My ' + L.records] = mine.rows[0].n;
 
   if (rbac.canSeeAllRecords(user.role)) {
     const all = await db.query('select count(*)::int as n from records');
-    stats['All records'] = all.rows[0].n;
+    stats['All ' + L.records] = all.rows[0].n;
   }
   if (user.role !== 'inputter') {
     const r = await db.query("select count(*)::int as n from users u join roles r on r.id = u.role_id where r.name = 'inputter'");
-    stats['Inputters'] = r.rows[0].n;
+    stats[L.rolePlurals.inputter] = r.rows[0].n;
   }
   if (user.role === 'administrator') {
     const u = await db.query('select count(*)::int as n from users');

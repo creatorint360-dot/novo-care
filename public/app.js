@@ -1,5 +1,5 @@
 'use strict';
-// Novo Staff front end. Plain JavaScript, no framework.
+// Front end. Plain JavaScript, no framework.
 // All text from the server is put on the page with textContent (never innerHTML),
 // so nothing a user types can run as code (this blocks XSS).
 // The only innerHTML is the QR code picture, which our own server draws.
@@ -7,6 +7,21 @@
 const root = document.getElementById('root');
 let ME = null;            // { user, abilities, stats, demoMode }
 let idleTimer = null;
+
+// The words the system uses (what a "record" is called, what each role is called).
+// They come from the server (/api/labels), so one setting re-labels everything.
+// This copy is used only if the server cannot be reached for a moment.
+let L = {
+  appName: 'Novo Care', tagline: 'Patient records you can trust, access you control.',
+  intro: 'A secure patient records portal with two-factor sign-in and role-based access.',
+  pills: ['Passwords protected with salt + pepper', 'Two-factor sign-in with an authenticator app', 'Patient notes encrypted with AES-256-GCM'],
+  record: 'patient note', records: 'patient notes', Record: 'Patient note', Records: 'Patient notes',
+  titleLabel: 'Patient (name or number)', detailsLabel: 'Clinical notes (stored encrypted)',
+  roles: { inputter: 'Nurse', manager: 'Doctor', admin: 'Records officer', administrator: 'Administrator' },
+  rolePlurals: { inputter: 'Nurses', manager: 'Doctors', admin: 'Records officers', administrator: 'Administrators' },
+  abilities: {},
+};
+const roleName = (role) => (L.roles && L.roles[role]) || role;
 
 // ---------------------------------------------------------------- helpers
 function h(tag, attrs, ...kids) {
@@ -79,14 +94,11 @@ function submit(form, box, work) {
 function authFrame(content) {
   return h('div', { class: 'auth' },
     h('section', { class: 'auth-art' },
-      h('div', { class: 'brand' }, h('div', { class: 'brand-mark' }, 'N'), 'Novo Staff'),
+      h('div', { class: 'brand' }, h('div', { class: 'brand-mark' }, 'N'), L.appName),
       h('div', {},
-        h('h1', {}, 'Records you can trust, access you control.'),
-        h('p', {}, 'A secure staff records portal with two-factor sign-in and role-based access.'),
-        h('ul', {},
-          h('li', {}, 'Passwords protected with salt + pepper'),
-          h('li', {}, 'Two-factor sign-in with an authenticator app'),
-          h('li', {}, 'Records encrypted with AES-256-GCM'))),
+        h('h1', {}, L.tagline),
+        h('p', {}, L.intro),
+        h('ul', {}, L.pills.map((t) => h('li', {}, t)))),
       h('small', {}, 'Computer Security - PBIT 309 / PBSE 309')),
     h('main', { class: 'auth-main' }, h('div', { class: 'panel' }, content)));
 }
@@ -181,7 +193,7 @@ async function logout(note) {
 
 function shell(active, title, subtitle, ...content) {
   const a = ME.abilities;
-  const items = [['dashboard', 'Dashboard'], ['records', 'Records']];
+  const items = [['dashboard', 'Dashboard'], ['records', L.Records]];
   if (a.creatableRoles.length || a.canDeleteInputters) items.push(['users', 'Users']);
   if (a.canViewAudit) items.push(['audit', 'Audit log']);
   if (a.canBackup) items.push(['backups', 'Backup']);
@@ -193,13 +205,13 @@ function shell(active, title, subtitle, ...content) {
 
   mount(h('div', { class: 'shell' },
     h('aside', { class: 'side' },
-      h('div', { class: 'brand dark' }, h('div', { class: 'brand-mark' }, 'N'), 'Novo Staff'),
+      h('div', { class: 'brand dark' }, h('div', { class: 'brand-mark' }, 'N'), L.appName),
       nav, h('div', { class: 'spacer' }),
       h('button', { class: 'nav', onclick: () => logout() }, 'Sign out')),
     h('main', { class: 'main' },
       h('div', { class: 'top' },
         h('div', {}, h('h2', {}, title), h('p', {}, subtitle)),
-        h('div', { class: 'chip' }, ME.user.fullName + ' - ', h('span', { class: 'role-tag' }, ME.user.role))),
+        h('div', { class: 'chip' }, ME.user.fullName + ' - ', h('span', { class: 'role-tag' }, roleName(ME.user.role)))),
       ME.demoMode ? h('div', { class: 'banner' }, 'Demo mode is ON: salt, pepper and their combination are visible in the database for the lecturer. Turn DEMO_MODE off after the demonstration.') : null,
       content)));
 }
@@ -208,6 +220,9 @@ const views = { dashboard, records, users, audit, backups, credentials, password
 function go(name) { resetIdle(); return views[name](); }
 
 async function boot() {
+  const lr = await api('/api/labels');
+  if (lr.ok && lr.data.roles) L = lr.data;
+  document.title = L.appName;
   const s = await api('/api/setup');
   if (s.ok && s.data.open) return viewSetup();
   const r = await api('/api/me');
@@ -218,12 +233,6 @@ async function boot() {
 }
 
 // ---------------------------------------------------------------- pages
-const ABILITY_TEXT = {
-  inputter: ['Add staff records', 'See and delete only your own records', 'Change your password'],
-  manager: ['Add staff records and see everyone\'s', 'Create Inputter accounts', 'Delete only your own records'],
-  admin: ['See every record and delete any of them', 'View and delete Inputter accounts', 'Cannot create accounts or read the audit log'],
-  administrator: ['Full control of the system', 'Create Inputters, Managers and Admins', 'Unlock accounts, reset 2FA, read and manage the audit log'],
-};
 
 async function dashboard() {
   const r = await api('/api/me');
@@ -231,17 +240,17 @@ async function dashboard() {
   ME = r.data;
   shell('dashboard', 'Hello, ' + ME.user.fullName.split(' ')[0], 'Here is your workspace.',
     h('div', { class: 'grid' }, Object.entries(ME.stats).map(([k, v]) => h('div', { class: 'stat' }, h('b', {}, v), h('span', {}, k)))),
-    h('div', { class: 'card' }, h('h3', {}, 'What your role (' + ME.user.role + ') can do'),
-      h('ul', { class: 'bullets' }, (ABILITY_TEXT[ME.user.role] || []).map((t) => h('li', {}, t)))));
+    h('div', { class: 'card' }, h('h3', {}, 'What your role (' + roleName(ME.user.role) + ') can do'),
+      h('ul', { class: 'bullets' }, ((L.abilities && L.abilities[ME.user.role]) || []).map((t) => h('li', {}, t)))));
 }
 
 async function records() {
   const box = h('div');
   const list = h('div');
   const form = h('form', {},
-    h('label', {}, 'Title'), h('input', { name: 'title', required: true, maxlength: 150 }),
-    h('label', {}, 'Details (stored encrypted)'), h('textarea', { name: 'details', required: true, maxlength: 5000 }),
-    h('button', { class: 'btn block', type: 'submit' }, 'Save record'));
+    h('label', {}, L.titleLabel), h('input', { name: 'title', required: true, maxlength: 150 }),
+    h('label', {}, L.detailsLabel), h('textarea', { name: 'details', required: true, maxlength: 5000 }),
+    h('button', { class: 'btn block', type: 'submit' }, 'Save ' + L.record));
 
   async function load() {
     const r = await api('/api/records');
@@ -252,19 +261,19 @@ async function records() {
         h('p', {}, rec.details),
         rec.canDelete ? h('div', { class: 'actions top-gap' },
           h('button', { class: 'btn danger small', onclick: async () => {
-            if (!confirm('Delete this record?')) return;
+            if (!confirm('Delete this ' + L.record + '?')) return;
             const d = await api('/api/records', 'POST', { action: 'delete', id: rec.id });
-            say(box, d.ok ? 'ok' : 'error', d.ok ? 'Record deleted.' : d.data.error); load();
-          } }, 'Delete')) : null)) : [h('p', { class: 'empty' }, 'No records yet.')]));
+            say(box, d.ok ? 'ok' : 'error', d.ok ? L.Record + ' deleted.' : d.data.error); load();
+          } }, 'Delete')) : null)) : [h('p', { class: 'empty' }, 'No ' + L.records + ' yet.')]));
   }
   submit(form, box, async (f) => {
     const r = await api('/api/records', 'POST', f);
-    say(box, r.ok ? 'ok' : 'error', r.ok ? 'Record saved (encrypted).' : r.data.error);
+    say(box, r.ok ? 'ok' : 'error', r.ok ? L.Record + ' saved (encrypted).' : r.data.error);
     if (r.ok) { form.reset(); load(); }
   });
-  shell('records', 'Records', 'Details are encrypted with AES-256-GCM before they reach the database.',
-    h('div', { class: 'two' }, h('div', { class: 'card' }, h('h3', {}, 'New record'), box, form),
-      h('div', { class: 'card' }, h('h3', {}, 'Records you may see'), list)));
+  shell('records', L.Records, 'Details are encrypted with AES-256-GCM before they reach the database.',
+    h('div', { class: 'two' }, h('div', { class: 'card' }, h('h3', {}, 'New ' + L.record), box, form),
+      h('div', { class: 'card' }, h('h3', {}, L.Records + ' you may see'), list)));
   load();
 }
 
@@ -279,7 +288,7 @@ async function users() {
       h('label', {}, 'Full name'), h('input', { name: 'full_name', required: true, maxlength: 100 }),
       h('label', {}, 'Username'), h('input', { name: 'username', required: true, maxlength: 30 }),
       h('label', {}, 'Email'), h('input', { name: 'email', type: 'email', required: true }),
-      h('label', {}, 'Role'), h('select', { name: 'role' }, a.creatableRoles.map((r) => h('option', { value: r }, r))),
+      h('label', {}, 'Role'), h('select', { name: 'role' }, a.creatableRoles.map((r) => h('option', { value: r }, roleName(r)))),
       h('label', {}, 'Temporary password'), pwInput({ name: 'password', autocomplete: 'new-password' }),
       h('button', { class: 'btn block', type: 'submit' }, 'Create account'));
     submit(form, box, async (f) => {
@@ -305,18 +314,18 @@ async function users() {
       h('thead', {}, h('tr', {}, ['User', 'Role', '2FA', 'Status', ''].map((t) => h('th', {}, t)))),
       h('tbody', {}, r.data.users.map((u) => h('tr', {},
         h('td', {}, h('b', {}, u.full_name), h('br'), h('small', {}, u.username + ' - ' + u.email)),
-        h('td', {}, h('span', { class: 'role-tag' }, u.role)),
+        h('td', {}, h('span', { class: 'role-tag' }, roleName(u.role))),
         h('td', {}, u.totp_enabled ? 'On' : 'Not yet'),
         h('td', {}, u.is_locked ? 'Locked' : 'Active'),
         h('td', {}, h('div', { class: 'actions' },
-          u.role === 'inputter' ? h('button', { class: 'btn danger small', onclick: () => act('delete', u, 'Delete inputter ' + u.username + '?') }, 'Delete') : null,
+          u.role === 'inputter' ? h('button', { class: 'btn danger small', onclick: () => act('delete', u, 'Delete ' + roleName('inputter') + ' ' + u.username + '?') }, 'Delete') : null,
           a.canRecover && u.is_locked ? h('button', { class: 'btn ghost small', onclick: () => act('unlock', u) }, 'Unlock') : null,
           a.canRecover ? h('button', { class: 'btn ghost small', onclick: () => act('reset2fa', u, 'Reset 2FA for ' + u.username + '?') }, 'Reset 2FA') : null))))))));
   }
 
   shell('users', 'Users', a.canDeleteInputters ? 'Accounts you manage.' : 'Create accounts for your team.',
     box, addCard,
-    a.canDeleteInputters ? h('div', { class: 'card' }, h('h3', {}, ME.user.role === 'administrator' ? 'All users' : 'Inputters'), tableHolder) : null);
+    a.canDeleteInputters ? h('div', { class: 'card' }, h('h3', {}, ME.user.role === 'administrator' ? 'All users' : L.rolePlurals.inputter), tableHolder) : null);
   loadTable();
 }
 
@@ -359,7 +368,7 @@ async function credentials() {
   table.replaceChildren(h('div', { class: 'table-wrap' }, h('table', {},
     h('thead', {}, h('tr', {}, ['User', 'Role', 'Salt (random, per user)', 'Pepper (same for all)', 'Salt + pepper', 'Stored hash'].map((t) => h('th', {}, t)))),
     h('tbody', {}, r.data.users.map((u) => h('tr', {},
-      h('td', {}, h('b', {}, u.username)), h('td', {}, u.role),
+      h('td', {}, h('b', {}, u.username)), h('td', {}, roleName(u.role)),
       h('td', { class: 'wrap mono' }, u.salt), h('td', { class: 'wrap mono' }, u.pepper || '(hidden)'),
       h('td', { class: 'wrap mono' }, u.salt_pepper || '(hidden)'), h('td', { class: 'wrap mono' }, u.password_hash)))))));
 
@@ -397,7 +406,7 @@ async function backups() {
     if (!r.ok) return say(box, 'error', r.data.error || 'Could not load the backups.');
     if (!r.data.backups.length) return tableHolder.replaceChildren(h('p', { class: 'empty' }, 'No backups yet. Press "Back up now".'));
     tableHolder.replaceChildren(h('div', { class: 'table-wrap' }, h('table', {},
-      h('thead', {}, h('tr', {}, ['#', 'When', 'By', 'Type', 'Users', 'Records', ''].map((t) => h('th', {}, t)))),
+      h('thead', {}, h('tr', {}, ['#', 'When', 'By', 'Type', 'Users', L.Records, ''].map((t) => h('th', {}, t)))),
       h('tbody', {}, r.data.backups.map((b) => h('tr', {},
         h('td', {}, b.id), h('td', {}, fmt(b.createdAt)), h('td', {}, b.by || '-'),
         h('td', {}, b.kind), h('td', {}, b.users), h('td', {}, b.records),
@@ -421,7 +430,7 @@ async function backups() {
     });
     confirmHolder.replaceChildren(h('div', { class: 'card' },
       h('h3', {}, 'Restore backup #' + b.id + '?'),
-      h('p', { class: 'bottom-gap' }, 'The current records are replaced by the records in this backup (' + b.records + '). A safety backup is taken first. Accounts, passwords, 2FA and settings are not changed.'),
+      h('p', { class: 'bottom-gap' }, 'The current ' + L.records + ' are replaced by the ' + L.records + ' in this backup (' + b.records + '). A safety backup is taken first. Accounts, passwords, 2FA and settings are not changed.'),
       msg, form));
     confirmHolder.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
@@ -443,9 +452,9 @@ async function backups() {
     const form = h('form', { autocomplete: 'off' },
       h('label', {}, 'Type RESET in capital letters'), h('input', { name: 'confirm', required: true, autocomplete: 'off' }),
       h('label', {}, 'Your password'), pwInput({ name: 'password', autocomplete: 'off' }),
-      h('button', { class: 'btn danger block', type: 'submit' }, 'Reset records (keep settings)'));
+      h('button', { class: 'btn danger block', type: 'submit' }, 'Reset ' + L.records + ' (keep settings)'));
     submit(form, msg, async (f) => {
-      if (!confirm('Delete ALL records now? A safety backup is taken first.')) return;
+      if (!confirm('Delete ALL ' + L.records + ' now? A safety backup is taken first.')) return;
       const r = await api('/api/backups', 'POST', { action: 'reset', confirm: f.confirm, password: f.password });
       if (!r.ok) return say(msg, 'error', r.data.error || 'Reset failed.');
       form.reset();
@@ -455,14 +464,14 @@ async function backups() {
     });
     resetCard = h('div', { class: 'card danger-zone' },
       h('h3', {}, 'Reset (Administrator only)'),
-      h('p', { class: 'bottom-gap' }, 'Empties all staff records so you can start again. Accounts, roles, passwords, two-factor devices and every setting stay exactly as they are. A safety backup is saved first, so Restore can bring the records back.'),
+      h('p', { class: 'bottom-gap' }, 'Empties all ' + L.records + ' so you can start again. Accounts, roles, passwords, two-factor devices and every setting stay exactly as they are. A safety backup is saved first, so Restore can bring the ' + L.records + ' back.'),
       msg, form);
   }
 
-  shell('backups', 'Backup', a.canRestoreOrReset ? 'Save, restore or reset the records.' : 'Save a copy of the data.',
+  shell('backups', 'Backup', a.canRestoreOrReset ? 'Save, restore or reset the ' + L.records + '.' : 'Save a copy of the data.',
     box,
     h('div', { class: 'card' }, h('h3', {}, 'Back up now'),
-      h('p', { class: 'bottom-gap' }, 'Saves an encrypted copy (AES-256-GCM) of the users and records. Nobody can read it without the system key. The newest 20 backups are kept.'),
+      h('p', { class: 'bottom-gap' }, 'Saves an encrypted copy (AES-256-GCM) of the users and ' + L.records + '. Nobody can read it without the system key. The newest 20 backups are kept.'),
       backupBtn),
     confirmHolder,
     h('div', { class: 'card' }, h('h3', {}, 'Saved backups'), tableHolder),

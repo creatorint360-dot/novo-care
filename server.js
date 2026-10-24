@@ -103,7 +103,7 @@ function createServer() {
 
 if (require.main === module) {
   const port = Number(process.env.PORT || 10000);
-  createServer().listen(port, '0.0.0.0', () => console.log('Novo Staff listening on port ' + port));
+  createServer().listen(port, '0.0.0.0', () => console.log(require('./lib/labels').labels().appName + ' listening on port ' + port));
 }
 
 module.exports = { createServer };

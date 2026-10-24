@@ -10,6 +10,7 @@ const { route, json, forbid } = require('../lib/http');
 const rbac = require('../lib/rbac');
 const { makeCredentials, passwordPolicyErrors } = require('../lib/security');
 const { validateNewUser } = require('../lib/validate');
+const { labels } = require('../lib/labels');
 const { audit } = require('../lib/audit');
 
 module.exports = route({ methods: ['GET', 'POST'] }, async ({ req, res, body, user, ip }) => {
@@ -55,7 +56,7 @@ module.exports = route({ methods: ['GET', 'POST'] }, async ({ req, res, body, us
       [fields.username, fields.full_name, fields.email, cred.password_hash, cred.salt, cred.pepper, cred.salt_pepper, role, user.id]
     );
     await audit('user_created', `Created ${fields.username} as ${role}`, user.id, user.username, ip);
-    return json(res, 201, { ok: true, message: `Account '${fields.username}' created as ${role}. They will set up 2FA at first sign-in.` });
+    return json(res, 201, { ok: true, message: `Account '${fields.username}' created as ${labels().roles[role] || role}. They will set up 2FA at first sign-in.` });
   }
 
   // ---------------- actions on an existing user ----------------
@@ -70,11 +71,11 @@ module.exports = route({ methods: ['GET', 'POST'] }, async ({ req, res, body, us
     if (!target) return json(res, 404, { error: 'User not found.' });
     if (target.role !== 'inputter') {
       await audit('delete_denied', `Tried to delete ${target.username} (${target.role})`, user.id, user.username, ip);
-      return json(res, 403, { error: 'You can only delete Inputter accounts.' });
+      return json(res, 403, { error: `You can only delete ${labels().roles.inputter} accounts.` });
     }
     await db.query('delete from users where id = $1', [target.id]);
     await audit('user_deleted', `Deleted inputter ${target.username}`, user.id, user.username, ip);
-    return json(res, 200, { ok: true, message: `Inputter '${target.username}' was deleted.` });
+    return json(res, 200, { ok: true, message: `${labels().roles.inputter} '${target.username}' was deleted.` });
   }
 
   if (action === 'unlock' || action === 'reset2fa') {

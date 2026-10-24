@@ -1,7 +1,7 @@
 {
-  "name": "Novo Staff",
-  "short_name": "Novo Staff",
-  "description": "Secure staff records with two-factor sign-in and role-based access.",
+  "name": "Novo Care",
+  "short_name": "Novo Care",
+  "description": "Secure patient records with two-factor sign-in and role-based access.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
