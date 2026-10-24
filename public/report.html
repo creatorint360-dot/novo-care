@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Novo Care Security Report</title>
+<meta name="theme-color" content="#7c5cfc">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=Figtree:wght@400;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="/report.css"></head><body>
+
+<header class="cover"><div class="wrap">
+  <div class="brand"><span class="mark">N</span>Novo Care</div>
+  <h1>A secure staff login system for a clinic</h1>
+  <p>Salted and peppered password storage, two-step sign-in, role-based access, encrypted patient notes, backup and reset. It runs online and as an Android app.</p>
+  <div class="meta"><span>Samuel Dzenenya</span><span>PBIT 309 / PBSE 309 Computer Security</span><span>Live on AWS + Render</span></div>
+  <a class="go" href="https://novo-staff.onrender.com" target="_blank" rel="noopener">Open the live system</a>
+</div></header>
+
+<nav><div class="wrap">
+  <a href="#overview">Overview</a><a href="#how">Architecture</a><a href="#salt">Salt and pepper</a><a href="#db">Database</a><a href="#login">Sign-in</a><a href="#roles">Roles</a><a href="#backup">Backup and reset</a><a href="#model">Any system</a><a href="#mobile">Mobile app</a><a href="#tests">Testing</a><a href="#demo">Demo guide</a>
+</div></nav>
+
+<section id="overview"><div class="wrap">
+  <div class="kick kv">Overview</div>
+  <h2>What was built</h2>
+  <p class="sub">Novo Care is a login and record system for clinic staff. Nurses, doctors, records officers and administrators each see only what their role allows. The same code can model a school, a bank or a staff office by changing one setting.</p>
+  <div class="grid">
+    <div class="c"><span class="tag v">Live online</span><h3>Website</h3><p>Hosted on Render at novo-staff.onrender.com. It installs on a phone home screen as a web app.</p></div>
+    <div class="c"><span class="tag o">Real database</span><h3>PostgreSQL on AWS</h3><p>An Amazon RDS database in Stockholm (eu-north-1), reached over verified TLS.</p></div>
+    <div class="c"><span class="tag m">Mobile</span><h3>Android app</h3><p>An Expo (React Native) app that signs in to the same server and shows the same features.</p></div>
+    <div class="c"><span class="tag s">Security</span><h3>Layered protection</h3><p>Salt, pepper, slow hashing, 2FA, lockout, encryption, audit log and server-side permissions.</p></div>
+  </div>
+</div></section>
+
+<section id="how"><div class="wrap">
+  <div class="kick kc">Architecture</div>
+  <h2>How the pieces connect</h2>
+  <p class="sub">The browser and the app both talk to one server. Only the server can reach the database, and it connects as a limited database user.</p>
+  <div class="flow">
+    <div class="node n1">Browser / PWA<small>Staff on a PC or phone</small></div>
+    <div class="node n2">Android app<small>Expo, secure token storage</small></div>
+    <div class="node n3">Render server<small>Node.js, no framework</small></div>
+    <div class="node n4">AWS RDS<small>PostgreSQL 16, TLS</small></div>
+  </div>
+  <div class="grid mt16">
+    <div class="c"><h3>Server</h3><p>Plain Node.js <code>http</code> server. Each feature is one file in <code>api/</code>; shared security code sits in <code>lib/</code>.</p></div>
+    <div class="c"><h3>Database access</h3><p>The server uses the <code>novostaff_app</code> account. It can read and write only the tables it needs. It cannot drop tables or change the schema.</p></div>
+    <div class="c"><h3>Firewall</h3><p>The AWS security group accepts database connections only from Render's address ranges and from approved admin addresses.</p></div>
+    <div class="c"><h3>Secrets</h3><p>Pepper, encryption key and signing key live in Render environment variables, never in GitHub.</p></div>
+  </div>
+</div></section>
+
+<section id="salt"><div class="wrap">
+  <div class="kick kv">Core requirement</div>
+  <h2>Salt and pepper, step by step</h2>
+  <p class="sub">A password is never stored. What is stored is a slow, one-way hash that was made from the password, a random salt and a secret pepper.</p>
+  <div class="steps">
+    <div class="step"><div><b>Make a salt</b><span>16 random bytes, shown as 32 hex characters, made fresh for every user. Two people with the same password still get different hashes.</span></div></div>
+    <div class="step"><div><b>Add the pepper</b><span>One secret value shared by the whole system, read from the <code>PEPPER</code> environment variable. It is not in the database, so a stolen database alone cannot be attacked.</span></div></div>
+    <div class="step"><div><b>Join them</b><span><code>salt_pepper = salt + pepper</code>. This joined value is the salt given to the hash function.</span></div></div>
+    <div class="step"><div><b>Hash slowly</b><span>PBKDF2 with HMAC-SHA256 and 600,000 rounds. Each guess costs an attacker real time.</span></div></div>
+    <div class="step"><div><b>Compare safely</b><span>At sign-in the same steps run on the typed password and the result is compared in constant time with the stored hash.</span></div></div>
+  </div>
+  <pre class="mt18">salt          = randomBytes(16).toString('hex')
+salt_pepper   = salt + PEPPER
+password_hash = PBKDF2-HMAC-SHA256(password, salt_pepper, 600000 rounds)</pre>
+  <div class="note warn"><b>Why the code reads the pepper from the environment.</b> A pepper written in the source would be public on GitHub and protect nothing. The recipe is visible in <code>lib/security.js</code>; the secret value is not.</div>
+</div></section>
+
+<section id="db"><div class="wrap">
+  <div class="kick kc">Core requirement</div>
+  <h2>What the database shows</h2>
+  <p class="sub">The lecturer asked to see the salt, the pepper and the two joined together for every user. While demo mode is on, the <code>users</code> table has these columns filled in.</p>
+  <div class="tw"><table>
+    <tr><th>Column</th><th>Holds</th><th>Example shape</th></tr>
+    <tr><td><code>username</code></td><td>Sign-in name</td><td>a staff member's name</td></tr>
+    <tr><td><code>salt</code></td><td>Random value, unique per user</td><td>32 hex characters</td></tr>
+    <tr><td><code>pepper</code></td><td>The system pepper (demo only)</td><td>same value on every row</td></tr>
+    <tr><td><code>salt_pepper</code></td><td>salt + pepper joined</td><td>salt followed by the pepper</td></tr>
+    <tr><td><code>password_hash</code></td><td>Result of PBKDF2</td><td>long hex string</td></tr>
+  </table></div>
+  <div class="grid mt16">
+    <div class="c"><span class="tag m">How to show it</span><h3>Live query</h3><p>From AWS CloudShell, connect with <code>psql</code> and run <code>select username, salt, pepper, salt_pepper, password_hash from users;</code></p></div>
+    <div class="c"><span class="tag v">Or on a PC</span><h3>Helper command</h3><p><code>Show-NovoCredentials</code> prints each user's values and confirms that salt + pepper equals salt_pepper.</p></div>
+    <div class="c"><span class="tag s">Inside the app</span><h3>Salt and pepper page</h3><p>Signed-in staff can open a page that explains and tests the recipe while demo mode is on.</p></div>
+  </div>
+  <div class="note warn"><b>Demo mode.</b> Storing the pepper beside the hash defeats its purpose, so the extra columns are filled only when <code>DEMO_MODE=true</code>. For real use it is switched off and the pepper stays outside the database. Rows saved while it was on keep their columns.</div>
+</div></section>
+
+<section id="login"><div class="wrap">
+  <div class="kick kv">Sign-in</div>
+  <h2>Protection around the login</h2>
+  <div class="grid">
+    <div class="c"><span class="tag v">2FA</span><h3>Authenticator codes</h3><p>Time-based one-time passwords (RFC 6238). Works with Google Authenticator and similar apps. The secret is stored encrypted.</p></div>
+    <div class="c"><span class="tag o">Lockout</span><h3>Five tries</h3><p>Five wrong passwords lock the account for 15 minutes. This slows down guessing.</p></div>
+    <div class="c"><span class="tag m">Sessions</span><h3>Signed cookies</h3><p>Sessions are signed with HMAC and can be cancelled instantly with a session version number, for example after a password change.</p></div>
+    <div class="c"><span class="tag s">CSRF</span><h3>Request header check</h3><p>Every change request must carry a custom header that other websites cannot add.</p></div>
+    <div class="c"><span class="tag r">Encryption</span><h3>AES-256-GCM</h3><p>Patient notes and 2FA secrets are encrypted before they reach the database.</p></div>
+    <div class="c"><span class="tag v">Audit</span><h3>Activity log</h3><p>Sign-ins, failures, changes, backups and restores are recorded with who and when.</p></div>
+  </div>
+</div></section>
+
+<section id="roles"><div class="wrap">
+  <div class="kick kc">Access control</div>
+  <h2>Who can do what</h2>
+  <p class="sub">Permissions are checked on the server for every request, so hiding a button in the page is never the only protection.</p>
+  <div class="tw"><table>
+    <tr><th>Action</th><th>Nurse</th><th>Doctor</th><th>Records officer</th><th>Administrator</th></tr>
+    <tr><td>Add patient notes and see own notes</td><td class="y">Yes</td><td class="y">Yes</td><td class="y">Yes</td><td class="y">Yes</td></tr>
+    <tr><td>See everyone's notes</td><td class="n">No</td><td class="y">Yes</td><td class="y">Yes</td><td class="y">Yes</td></tr>
+    <tr><td>Delete any note</td><td class="n">No</td><td class="n">No</td><td class="y">Yes</td><td class="y">Yes</td></tr>
+    <tr><td>Create a backup</td><td class="n">No</td><td class="y">Yes</td><td class="y">Yes</td><td class="y">Yes</td></tr>
+    <tr><td>View the audit log</td><td class="n">No</td><td class="n">No</td><td class="n">No</td><td class="y">Yes</td></tr>
+    <tr><td>Restore, reset, unlock accounts</td><td class="n">No</td><td class="n">No</td><td class="n">No</td><td class="y">Yes</td></tr>
+  </table></div>
+  <p class="sub mt14">Creating users follows a ladder: a Doctor can add Nurses, and an Administrator can add Nurses, Doctors and Records officers.</p>
+  
+</div></section>
+
+<section id="backup"><div class="wrap">
+  <div class="kick kv">Added after lecturer feedback</div>
+  <h2>Backup, restore and reset</h2>
+  <div class="grid">
+    <div class="c"><span class="tag m">Backup</span><h3>One button</h3><p>Copies all users and notes into an encrypted snapshot in the database. The newest 20 are kept.</p></div>
+    <div class="c"><span class="tag o">Restore</span><h3>Go back to a snapshot</h3><p>Administrator only. Asks for the password again. A safety backup is taken first, then the notes return to that snapshot.</p></div>
+    <div class="c"><span class="tag r">Reset</span><h3>Clear the notes</h3><p>Administrator only. Needs the password and the typed word RESET. It empties the notes after a safety backup.</p></div>
+  </div>
+  <div class="note ok"><b>Reset does not change settings.</b> Accounts, passwords, 2FA, roles and system settings are never touched by restore or reset. Only the stored notes change, and every use is written to the audit log.</div>
+</div></section>
+
+<section id="model"><div class="wrap">
+  <div class="kick kc">Flexible design</div>
+  <h2>One system, any setting</h2>
+  <p class="sub">The labels live in one file, <code>lib/labels.js</code>. A single environment variable, <code>SYSTEM_PROFILE</code>, picks the wording. The website and the app both read it from the server.</p>
+  <div class="tw"><table>
+    <tr><th>Profile</th><th>Records are called</th><th>Roles</th></tr>
+    <tr><td><code>clinic</code> (default)</td><td>Patient notes</td><td>Nurse, Doctor, Records officer, Administrator</td></tr>
+    <tr><td><code>school</code></td><td>Student results</td><td>Teacher, Head of department, Exam officer, Administrator</td></tr>
+    <tr><td><code>bank</code></td><td>Transactions</td><td>Teller, Branch manager, Auditor, Administrator</td></tr>
+    <tr><td><code>staff</code></td><td>Staff records</td><td>Inputter, Manager, Admin, Administrator</td></tr>
+  </table></div>
+  <p class="sub mt14">The security rules and database stay identical. Only the words change.</p>
+</div></section>
+
+<section id="mobile"><div class="wrap">
+  <div class="kick kv">Mobile</div>
+  <h2>The Android app</h2>
+  <div class="grid">
+    <div class="c"><h3>Same features</h3><p>Sign-in with 2FA, dashboard, patient notes, users, audit log, backup, salt and pepper page, change password.</p></div>
+    <div class="c"><h3>Safe tokens</h3><p>Session tokens are kept in the phone's secure storage and sent in headers to the same server.</p></div>
+    <div class="c"><h3>Installable APK</h3><p>Built with Expo's cloud build service as an Android package, so it installs without Expo Go.</p></div>
+    <div class="c"><h3>iPhone</h3><p>An iPhone build needs a paid Apple developer account. iPhone users open the website and choose Add to Home Screen.</p></div>
+  </div>
+</div></section>
+
+<section id="tests"><div class="wrap">
+  <div class="kick kc">Verification</div>
+  <h2>How it was tested</h2>
+  <div class="grid">
+    <div class="c"><span class="tag m">Automated</span><h3>102 server checks</h3><p>An end-to-end script exercises sign-in, 2FA, roles, lockout, records, backups and restore against a real database.</p></div>
+    <div class="c"><span class="tag v">Browser</span><h3>Interface checks</h3><p>A headless browser walks the website and the app's web build, including the password show/hide button and the records list.</p></div>
+    <div class="c"><span class="tag o">On devices</span><h3>Real phone</h3><p>The Android app was run on a real phone through Expo Go and as an installed APK, including the keyboard fix.</p></div>
+  </div>
+</div></section>
+
+<section id="demo"><div class="wrap">
+  <div class="kick kv">For the lecturer</div>
+  <h2>A short demo path</h2>
+  <div class="steps">
+    <div class="step"><div><b>Open the live site</b><span>https://novo-staff.onrender.com. The first load can take about a minute because the free host sleeps when idle.</span></div></div>
+    <div class="step"><div><b>Sign in with 2FA</b><span>Enter the password, then the six-digit code from the authenticator app.</span></div></div>
+    <div class="step"><div><b>Add a patient note</b><span>It appears in the list and on the dashboard counts. Encrypted in the database.</span></div></div>
+    <div class="step"><div><b>Show salt and pepper</b><span>With demo mode on, run the query in CloudShell to see salt, pepper and salt_pepper for every user.</span></div></div>
+    <div class="step"><div><b>Backup, then restore</b><span>Create a backup, add a note, restore, and see the note disappear. Check the audit log.</span></div></div>
+  </div>
+</div></section>
+
+<footer><div class="wrap">Novo Care &middot; Samuel Dzenenya &middot; PBIT 309 / PBSE 309 Computer Security</div></footer>
+</body></html>

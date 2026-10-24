@@ -89,7 +89,7 @@ function createServer() {
       return res.end('Method not allowed');
     }
 
-    const wanted = pathname === '/' ? '/index.html' : pathname;
+    const wanted = pathname === '/' ? '/index.html' : pathname === '/report' ? '/report.html' : pathname;
     const file = files.get(wanted);
     if (!file) { res.statusCode = 404; return res.end('Not found'); }
 
