@@ -1,5 +1,6 @@
 'use strict';
-// Novo Staff web server (runs on Render).
+// Novo Care web server for local use and Render. On Vercel the same api/ files run as
+// serverless functions and public/ is served as static files (see vercel.json).
 //   /api/<name>   runs api/<name>.js
 //   /healthz      tells Render the server is alive
 //   anything else serves the files in public/
@@ -11,15 +12,7 @@ const path = require('path');
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
-// Security headers sent with EVERY response.
-const SECURITY_HEADERS = {
-  'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
-  'X-Frame-Options': 'DENY',
-  'X-Content-Type-Options': 'nosniff',
-  'Referrer-Policy': 'same-origin',
-  'Strict-Transport-Security': 'max-age=63072000; includeSubDomains',
-  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
-};
+const { SECURITY_HEADERS } = require('./lib/headers');
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
