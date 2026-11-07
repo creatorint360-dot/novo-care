@@ -3,7 +3,7 @@
 --  Run with:  node scripts/run-sql.js least_privilege.sql
 --  (the password comes from the NOVO_APP_PASSWORD environment variable,
 --   so it is never written in a file).
---  This account can ONLY read/write the 5 Novo Staff tables. It cannot
+--  This account can ONLY read/write the 5 Novo Care tables. It cannot
 --  create, drop or change tables, so a bug cannot damage the structure.
 -- =====================================================================
 do $$

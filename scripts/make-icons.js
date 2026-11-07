@@ -1,5 +1,5 @@
 'use strict';
-// Draws the Novo Staff app icons (PNG) with plain code, no image tools needed.
+// Draws the Novo Care app icons (PNG) with plain code, no image tools needed.
 // Run once:  node scripts/make-icons.js
 const fs = require('fs');
 const path = require('path');

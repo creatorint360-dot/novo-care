@@ -1,8 +1,8 @@
 {
-  "name": "novo-staff",
+  "name": "novo-care",
   "version": "1.0.0",
   "private": true,
-  "description": "Novo Staff: secure staff login system (Render + AWS RDS PostgreSQL)",
+  "description": "Novo Care: secure clinic login system (Vercel + AWS RDS PostgreSQL)",
   "main": "server.js",
   "engines": {
     "node": ">=20"

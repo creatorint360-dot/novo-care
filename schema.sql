@@ -1,5 +1,5 @@
 -- =====================================================================
---  Novo Staff database (PostgreSQL on AWS RDS)
+--  Novo Care database (PostgreSQL on AWS RDS)
 --  Run with:  node scripts/run-sql.js schema.sql
 --  It is safe to run more than once.
 -- =====================================================================
